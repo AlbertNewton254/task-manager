@@ -1,8 +1,13 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
 from schemas import Task, TaskCreate
 from datetime import datetime
-from fastapi import HTTPException
+import models
+from database import engine, get_db
+
+# Create database tables
+models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
@@ -14,9 +19,6 @@ app.add_middleware(
     allow_headers=['*']
 )
 
-tasks_db = []
-task_id_counter = 1
-
 @app.get('/')
 def read_root():
     return {'message': 'Task Manager API is running!'}
@@ -26,51 +28,47 @@ def health_check():
     return {'status': 'healthy', 'version': '1.0.0'}
 
 @app.get('/tasks', response_model=list[Task])
-def get_tasks():
-    return tasks_db
+def get_tasks(db: Session = Depends(get_db)):
+    return db.query(models.Task).all()
 
 @app.post('/tasks', response_model=Task)
-def create_task(task: TaskCreate):
-    global task_id_counter
-
-    new_task = Task(
-        id=task_id_counter,
+def create_task(task: TaskCreate, db: Session = Depends(get_db)):
+    new_task = models.Task(
         title=task.title,
         description=task.description,
-        priority=task.priority,
-        completed=False,
-        created_at=datetime.now()
+        priority=task.priority
     )
-
-    tasks_db.append(new_task)
-    task_id_counter += 1
-
+    
+    db.add(new_task)
+    db.commit()
+    db.refresh(new_task)
+    
     return new_task
 
 @app.put('/task/{task_id}', response_model=Task)
-def update_task(task_id: int, task_update=TaskCreate):
-    for i, task in enumerate(tasks_db):
-        if task.id == task_id:
-            update_task = Task(
-                id=task.id,
-                title=task_update.title,
-                description=task_update.description,
-                priority=task_update.priority,
-                completed=tasks_db[i].completed,
-                created_at=tasks_db[i].created_at
-            )
-            tasks_db[i] = updated_task
-            return update_task
-    raise HTTPException(status_code=404, detail='Task not found')
+def update_task(task_id: int, task_update: TaskCreate, db: Session = Depends(get_db)):
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    
+    if not task:
+        raise HTTPException(status_code=404, detail='Task not found')
+    
+    task.title = task_update.title
+    task.description = task_update.description
+    task.priority = task_update.priority
+    
+    db.commit()
+    db.refresh(task)
+    
+    return task
 
 @app.delete("/tasks/{task_id}")
-def delete_task(task_id: int):
-    global tasks_db
-
-    task_exists = any(task.id == task_id for task in tasks_db)
-
-    if not task_exists:
+def delete_task(task_id: int, db: Session = Depends(get_db)):
+    task = db.query(models.Task).filter(models.Task.id == task_id).first()
+    
+    if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-
-    tasks_db = [task for task in tasks_db if task.id != task_id]
+    
+    db.delete(task)
+    db.commit()
+    
     return {"message": "Task deleted successfully"}

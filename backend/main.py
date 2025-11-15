@@ -5,15 +5,22 @@ from schemas import Task, TaskCreate
 from datetime import datetime
 import models
 from database import engine, get_db
+from config import settings
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI()
+app = FastAPI(
+    title="Task Manager API",
+    description="A REST API for managing tasks",
+    version="1.0.0",
+    docs_url="/docs" if settings.environment == "development" else None,
+    redoc_url="/redoc" if settings.environment == "development" else None
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['http://localhost:5173'],
+    allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*']

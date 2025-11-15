@@ -1,16 +1,15 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from config import settings
 
-# SQLite database URL
-SQLALCHEMY_DATABASE_URL = "sqlite:///./tasks.db"
+# Get database URL from settings
+SQLALCHEMY_DATABASE_URL = settings.database_url
 
-# Create SQLite engine
-# connect_args={"check_same_thread": False} is needed only for SQLite
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, 
-    connect_args={"check_same_thread": False}
-)
+# Create engine with appropriate settings
+# connect_args is only needed for SQLite
+connect_args = {"check_same_thread": False} if SQLALCHEMY_DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args=connect_args)
 
 # Create SessionLocal class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
